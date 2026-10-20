@@ -5,15 +5,19 @@ import { getSessionUser } from "@/lib/auth";
 
 const createSchema = z.object({ title: z.string().min(1).max(200), body: z.string().max(10000).default("") });
 
-export async function GET() {
-  const user = await getSessionUser(undefined); // placeholder — see middleware for cookie forwarding
-  const items = await prisma.item.findMany({ orderBy: { createdAt: "desc" }, take: 50 });
+export async function GET(req: NextRequest) {
+  const user = await getSessionUser(req.cookies.get("session")?.value);
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const items = await prisma.item.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+  });
   return NextResponse.json({ items, user });
 }
 
 export async function POST(req: NextRequest) {
-  const token = req.cookies.get("session")?.value;
-  const user = await getSessionUser(token);
+  const user = await getSessionUser(req.cookies.get("session")?.value);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const parsed = createSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
